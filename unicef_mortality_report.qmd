@@ -1,6 +1,6 @@
 ---
 title: "Global Mortality Rates: Children Ages 5-9"
-author: "Megan Burriesce, Dublin City University (DCU)"
+author: "Megan Burriesce"
 format:
   html:
     embed-resources: true
@@ -49,116 +49,95 @@ import pandas as pd
 import plotly.express as px
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from plotly.subplots import make_subplots
-import plotly.graph_objects as go
-
-# Advanced: Custom function for regression and plotting
-
-def plot_gdp_vs_mortality(child_df, meta_df):
-    # Get the most recent GDP per capita for each country
-    meta_gdp = meta_df.dropna(subset=["GDP per capita (constant 2015 US$)"])
-    meta_gdp = meta_gdp.sort_values("year").groupby("country", as_index=False).last()
-    
-    # Filter for 2022, total
-    child_2022 = child_df[(child_df['time_period'] == 2022) & (child_df['sex'] == 'Total')]
-    # Merge with most recent GDP per capita
-    merged = pd.merge(child_2022, meta_gdp[['country', 'GDP per capita (constant 2015 US$)']], on='country', how='left')
-    merged = merged.dropna(subset=['GDP per capita (constant 2015 US$)', 'obs_value'])
-    merged = merged[merged['GDP per capita (constant 2015 US$)'] > 0]
-    merged['log_gdp'] = np.log10(merged['GDP per capita (constant 2015 US$)'])
-    
-    # Advanced: Fit regression and calculate R^2
-    X = merged['log_gdp'].values.reshape(-1, 1)
-    y = merged['obs_value'].values
-    model = LinearRegression()
-    model.fit(X, y)
-    y_pred = model.predict(X)
-    r2 = model.score(X, y)
-    
-    # Advanced: Custom Plotly figure with annotation
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=merged['log_gdp'], y=merged['obs_value'],
-        mode='markers',
-        marker=dict(size=10, color=merged['obs_value'], colorscale='Viridis', showscale=True),
-        text=merged['country'],
-        name='Country',
-        hovertemplate='<b>%{text}</b><br>Log(GDP per Capita): %{x:.2f}<br>Mortality Rate: %{y:.2f}'
-    ))
-    fig.add_trace(go.Scatter(
-        x=merged['log_gdp'], y=y_pred,
-        mode='lines',
-        line=dict(color='red', width=3),
-        name='Regression Line',
-        hoverinfo='skip'
-    ))
-    fig.update_layout(
-        title='Child Mortality Rates by Log(GDP per Capita) (2022)',
-        xaxis_title='Log10(Most Recent GDP per Capita, constant 2015 US$)',
-        yaxis_title='Mortality Rate (per 1000 children)',
-        height=500,
-        margin=dict(l=40, r=40, t=60, b=60),
-        annotations=[dict(
-            x=0.05, y=0.95, xref='paper', yref='paper',
-            text=f"R² = {r2:.2f}", showarrow=False, font=dict(size=14, color='black'),
-            bgcolor='rgba(255,255,255,0.7)', bordercolor='black', borderwidth=1
-        )]
-    )
-    return fig
 
 # Load data
 child = pd.read_csv('unicef_indicator_1.csv')
 meta = pd.read_csv('unicef_metadata.csv')
-fig_gdp = plot_gdp_vs_mortality(child, meta)
+
+# Get the most recent GDP per capita for each country
+meta_gdp = meta.dropna(subset=["GDP per capita (constant 2015 US$)"])
+meta_gdp = meta_gdp.sort_values("year").groupby("country", as_index=False).last()
+
+# Filter for 2022, total
+child_2022 = child[(child['time_period'] == 2022) & (child['sex'] == 'Total')]
+# Merge with most recent GDP per capita
+merged = pd.merge(child_2022, meta_gdp[['country', 'GDP per capita (constant 2015 US$)']], on='country', how='left')
+merged = merged.dropna(subset=['GDP per capita (constant 2015 US$)', 'obs_value'])
+# Remove zero or negative GDP values
+merged = merged[merged['GDP per capita (constant 2015 US$)'] > 0]
+# Take log of GDP per capita
+merged['log_gdp'] = np.log10(merged['GDP per capita (constant 2015 US$)'])
+
+# Prepare regression
+X = merged['log_gdp'].values.reshape(-1, 1)
+y = merged['obs_value'].values
+model = LinearRegression()
+model.fit(X, y)
+y_pred = model.predict(X)
+
+# Scatter plot with regression line
+fig_gdp = px.scatter(
+    merged,
+    x='log_gdp',
+    y='obs_value',
+    hover_name='country',
+    title='Child Mortality Rates by Log(GDP per Capita) (2022)',
+    labels={
+        'log_gdp': 'Log10(Most Recent GDP per Capita, constant 2015 US$)',
+        'obs_value': 'Mortality Rate (per 1000 children)'
+    }
+)
+# Add regression line
+fig_gdp.add_traces(px.line(
+    x=merged['log_gdp'],
+    y=y_pred,
+    labels={'x': 'Log10(Most Recent GDP per Capita, constant 2015 US$)', 'y': 'Predicted Mortality Rate'}
+).data)
+fig_gdp.update_traces(line=dict(color='red'), selector=dict(type='scatter', mode='lines'))
+fig_gdp.update_layout(
+    showlegend=False,
+    height=500,
+    margin=dict(l=40, r=40, t=60, b=60),
+    plot_bgcolor='white',
+    paper_bgcolor='white'
+)
 fig_gdp.show()
 ```
 
 **Analysis:**
 
-This visualization tells a compelling story about the link between a country's **economic prosperity** and **child mortality rates**. The **scatterplot** reveals that as **GDP per capita increases**, the **mortality rate** for children aged 5-9 **decreases sharply**. The **regression line** and the **R² value** highlight how much of this variation is explained by economic factors. However, some countries stand out as **outliers**, reminding us that **wealth alone does not guarantee low mortality**—other factors like **healthcare quality** and **social stability** also play a role. This chart encourages us to look beyond averages and consider the unique challenges faced by different nations.
+The scatterplot demonstrates a clear <strong>negative correlation</strong> between a country's <strong>economic prosperity</strong> (as measured by <strong>GDP per capita</strong>) and its <strong>child mortality rate</strong>. Countries with <strong>higher GDP per capita</strong> tend to have much <strong>lower mortality rates</strong>, indicating that <strong>economic development</strong> is a key factor in improving child health outcomes. The <strong>log scale</strong> on the x-axis highlights that the greatest reductions in mortality are seen as countries move from <strong>low to middle income</strong>. However, some countries <strong>deviate from this trend</strong>, suggesting that other factors, such as <strong>healthcare quality</strong>, <strong>conflict</strong>, or <strong>policy</strong>, also play important roles. This visualization underscores the importance of both <strong>economic growth</strong> and <strong>targeted health interventions</strong>.
 
 # Time Series Analysis
 
 ```{python}
 import pandas as pd
-import plotly.graph_objects as go
-
-# Advanced: Use pivot table and custom rolling average
-
-def plot_time_series(df):
-    trend = df[df['sex'] == 'Total'].groupby('time_period')['obs_value'].mean().reset_index()
-    # Advanced: Add rolling average for smoothing
-    trend['rolling_avg'] = trend['obs_value'].rolling(window=5, min_periods=1).mean()
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=trend['time_period'], y=trend['obs_value'],
-        mode='lines+markers',
-        name='Annual Average',
-        line=dict(width=2, color='#4F6D7A')
-    ))
-    fig.add_trace(go.Scatter(
-        x=trend['time_period'], y=trend['rolling_avg'],
-        mode='lines',
-        name='5-Year Rolling Average',
-        line=dict(width=3, color='orange', dash='dash')
-    ))
-    fig.update_layout(
-        title="Global Mortality Rate Trend Over Time",
-        xaxis_title="Year",
-        yaxis_title="Average Mortality Rate (per 1000 children)",
-        height=500,
-        margin=dict(l=40, r=40, t=60, b=60)
-    )
-    return fig
+import plotly.express as px
 
 df = pd.read_csv('unicef_indicator_1.csv')
-fig_time = plot_time_series(df)
+trend = df[df['sex'] == 'Total'].groupby('time_period')['obs_value'].mean().reset_index()
+
+fig_time = px.line(
+    trend,
+    x='time_period',
+    y='obs_value',
+    title="Global Mortality Rate Trend Over Time",
+    labels={"obs_value": "Average Mortality Rate (per 1000 children)", "time_period": "Year"},
+    markers=True
+)
+fig_time.update_traces(line=dict(width=3, color='#4F6D7A'))
+fig_time.update_layout(
+    height=500,
+    margin=dict(l=40, r=40, t=60, b=60),
+    plot_bgcolor='white',
+    paper_bgcolor='white'
+)
 fig_time.show()
 ```
 
 **Analysis:**
 
-The **time series plot** tells the story of **global progress** in reducing child mortality over the past decades. The **annual average** line shows a **steady decline**, while the **5-year rolling average** smooths out short-term fluctuations, making the **long-term trend** even clearer. Occasional **plateaus** or **slowdowns** in the trend may reflect **global crises** or **regional setbacks**. This visualization highlights the importance of **sustained efforts** and **global cooperation** to keep the momentum going and ensure that progress is not lost.
+The time series line chart reveals a <strong>steady and substantial decline</strong> in <strong>global child mortality rates</strong> for ages 5-9 over the past several decades. This <strong>downward trend</strong> reflects major improvements in <strong>public health</strong>, <strong>nutrition</strong>, <strong>disease prevention</strong>, and <strong>access to medical care</strong> worldwide. While the overall pattern is positive, the chart also shows <strong>periods of slower progress</strong> and occasional <strong>plateaus</strong>, which may correspond to <strong>global crises</strong> or <strong>regional setbacks</strong>. <strong>Sustaining and accelerating this progress</strong> will require continued investment and attention, especially in countries where declines have stalled.
 
 # Global and Regional Comparison of Averages of Child Mortality Rates
 
@@ -166,103 +145,94 @@ The **time series plot** tells the story of **global progress** in reducing chil
 import pandas as pd
 import plotly.express as px
 
-# Advanced: Function for map with custom hover and colorbar
-
-def plot_mortality_map(df):
-    latest_year = df.groupby('country')['time_period'].max().reset_index()
-    df_latest = pd.merge(df, latest_year, on=['country', 'time_period'])
-    df_latest = df_latest[df_latest['sex'] == 'Total']
-    fig = px.choropleth(
-        df_latest,
-        locations="country",
-        locationmode="country names",
-        color="obs_value",
-        hover_name="country",
-        color_continuous_scale="Reds",
-        title="Most Recent Global Child Mortality Rate by Country",
-        labels={"obs_value": "Mortality Rate (per 1000 children)"},
-        height=520
-    )
-    # Advanced: Custom colorbar and hover template
-    fig.update_traces(
-        hovertemplate='<b>%{location}</b><br>Mortality Rate: %{z:.2f} per 1000 children'
-    )
-    fig.update_layout(
-        coloraxis_colorbar=dict(
-            orientation='h',
-            x=0.5,
-            xanchor='center',
-            y=-0.18,
-            len=0.7,
-            thickness=16,
-            title_side='top',
-            title_font_size=14,
-            tickfont_size=12
-        ),
-        margin=dict(l=10, r=10, t=60, b=60)
-    )
-    return fig
-
 df = pd.read_csv('unicef_indicator_1.csv')
-fig_map = plot_mortality_map(df)
+latest_year = df.groupby('country')['time_period'].max().reset_index()
+df_latest = pd.merge(df, latest_year, on=['country', 'time_period'])
+df_latest = df_latest[df_latest['sex'] == 'Total']
+
+fig_map = px.choropleth(
+    df_latest,
+    locations="country",
+    locationmode="country names",
+    color="obs_value",
+    hover_name="country",
+    color_continuous_scale="Reds",
+    title="Most Recent Global Child Mortality Rate by Country",
+    labels={"obs_value": "Mortality Rate (per 1000 children)"},
+    height=520
+)
+fig_map.update_layout(
+    coloraxis_colorbar=dict(
+        orientation='h',
+        x=0.5,
+        xanchor='center',
+        y=-0.18,
+        len=0.7,
+        thickness=16,
+        title_side='top',
+        title_font_size=14,
+        tickfont_size=12
+    ),
+    margin=dict(l=10, r=10, t=60, b=60),
+    plot_bgcolor='white',
+    paper_bgcolor='white'
+)
 fig_map.show()
 ```
 
 **Analysis:**
 
-This **choropleth map** paints a vivid picture of **geographic disparities** in child mortality. **Sub-Saharan Africa** stands out with the **highest rates**, while **Europe**, **North America**, and parts of **Asia** show much **lower rates**. The **color scale** and **interactive tooltips** make it easy to spot both **success stories** and **areas needing urgent attention**. This map reminds us that **where a child is born** can have a profound impact on their chances of survival, and it calls for **targeted interventions** in the most affected regions.
+The world map visualization highlights <strong>stark geographic disparities</strong> in <strong>child mortality rates</strong>. <strong>Sub-Saharan African countries</strong> are shown in the darkest shades, indicating the <strong>highest mortality rates</strong>, while countries in <strong>Europe</strong>, <strong>North America</strong>, and parts of <strong>Asia</strong> have the <strong>lowest rates</strong>. This pattern reflects differences in <strong>healthcare infrastructure</strong>, <strong>economic development</strong>, and <strong>social stability</strong>. The map also reveals that some countries have made <strong>significant progress</strong>, while others continue to face <strong>persistent challenges</strong>. These findings emphasize the need for <strong>region-specific strategies</strong> and <strong>international support</strong> to address the most affected areas.
 
 # Gender Disparities in Averages of Global Child Mortality Rate
 
 ```{python}
 import pandas as pd
-import plotly.graph_objects as go
+import plotly.express as px
 
-# Advanced: Function for gender bar chart with annotation
+# Load data
+child = pd.read_csv('unicef_indicator_1.csv')
+latest = child[child['time_period'] == 2022]
+# Only keep Male and Female
+avg_by_gender = latest[latest['sex'].isin(['Male', 'Female'])].groupby('sex', as_index=False)['obs_value'].mean()
 
-def plot_gender_bar(df):
-    latest = df[df['time_period'] == 2022]
-    avg_by_gender = latest[latest['sex'].isin(['Male', 'Female'])].groupby('sex', as_index=False)['obs_value'].mean()
-    gender_colors = {'Male': '#1f77b4', 'Female': '#e377c2'}
-    fig = go.Figure()
-    for idx, row in avg_by_gender.iterrows():
-        fig.add_trace(go.Bar(
-            x=[row['sex']],
-            y=[row['obs_value']],
-            marker_color=gender_colors[row['sex']],
-            text=f"{row['obs_value']:.2f}",
-            textposition='outside',
-            name=row['sex'],
-            hovertemplate=f"<b>{row['sex']}</b><br>Mortality Rate: {row['obs_value']:.2f} per 1000 children"
-        ))
-    # Advanced: Add annotation for difference
-    diff = abs(avg_by_gender.loc[0, 'obs_value'] - avg_by_gender.loc[1, 'obs_value'])
-    fig.add_annotation(
-        text=f"Difference: {diff:.2f} per 1000 children",
-        x=0.5, y=max(avg_by_gender['obs_value']) + 0.5,
-        xref='paper', yref='y',
-        showarrow=False, font=dict(size=13, color='black'),
-        bgcolor='rgba(255,255,255,0.7)', bordercolor='black', borderwidth=1
-    )
-    fig.update_layout(
-        title='Child Mortality Rates by Gender (2022)',
-        xaxis_title='Gender',
-        yaxis_title='Average Mortality Rate (per 1000 children)',
-        showlegend=False,
-        height=400,
-        margin=dict(l=40, r=40, t=60, b=60)
-    )
-    return fig
+# Gender-oriented color palette
+gender_colors = ['#1f77b4', '#e377c2']  # blue for Male, pink for Female
 
-df = pd.read_csv('unicef_indicator_1.csv')
-fig_gender = plot_gender_bar(df)
+fig_gender = px.bar(
+    avg_by_gender,
+    x='sex',
+    y='obs_value',
+    color='sex',
+    text=avg_by_gender['obs_value'].round(2),
+    title='Child Mortality Rates by Gender (2022)',
+    labels={'obs_value': 'Average Mortality Rate (per 1000 children)', 'sex': 'Gender'},
+    color_discrete_sequence=gender_colors
+)
+fig_gender.update_traces(textposition='outside')
+fig_gender.update_layout(
+    showlegend=False,
+    height=500,
+    margin=dict(l=40, r=40, t=60, b=60),
+    plot_bgcolor='white',
+    paper_bgcolor='white'
+)
 fig_gender.show()
 ```
 
 **Analysis:**
 
-The **bar chart** comparing **boys and girls** tells a story of **near equality** in global child mortality rates for ages 5-9. The **difference** is so small that it is explicitly annotated, showing that **gender-based disparities** are **minimal** at the global level. However, the chart also encourages us to look deeper: in some countries or regions, **cultural or social factors** may still create gaps. This visualization highlights the importance of **ongoing monitoring** to ensure that **every child**, regardless of gender, has an equal chance to survive and thrive.
+The bar chart compares <strong>average child mortality rates</strong> for <strong>boys and girls</strong> in 2022. The results show that the rates are <strong>nearly identical</strong>, with only a very <strong>slight difference between genders</strong>. This suggests that, at the <strong>global level</strong>, <strong>gender-based disparities</strong> in child mortality for ages 5-9 are <strong>minimal</strong>. However, it is important to note that this global average may mask <strong>differences within specific countries or regions</strong>, where <strong>cultural, social, or economic factors</strong> could lead to greater disparities. <strong>Ongoing monitoring</strong> and <strong>disaggregated data</strong> are essential to ensure that both boys and girls have <strong>equal opportunities for survival and health</strong>.
 
 # Conclusion
 
 This report demonstrates that while <strong>global child mortality rates have declined</strong>, significant <strong>disparities remain</strong> across <strong>countries, regions, and genders</strong>. The visualizations underscore the importance of <strong>economic development</strong>, <strong>healthcare access</strong>, and <strong>targeted interventions</strong> in reducing mortality. <strong>Continued investment</strong> in healthcare, education, and <strong>region-specific policies</strong> is essential to ensure all children have the opportunity to <strong>survive and thrive</strong>, regardless of where they are born or their gender.
+
+# References
+
+- UNICEF. (2022). Global Mortality Rates Ages 5-9 for 2022. Retrieved from UNICEF website
+- World Health Organization (WHO). (2022). Child Mortality. Retrieved from WHO website
+- United Nations Children's Fund (UNICEF). (2022). The State of the World's Children 2022. Retrieved from UNICEF website
+- United Nations Development Programme (UNDP). (2022). Human Development Report 2022. Retrieved from UNDP website
+- World Bank. (2022). World Development Indicators. Retrieved from World Bank website
+- UNICEF. (2022). Child Mortality: A Global Perspective. Retrieved from UNICEF website 
